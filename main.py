@@ -80,11 +80,11 @@ def shutdown() -> NoReturn:
 
 
 if __name__ == "__main__":
-    if sys.version_info.major != 3 or sys.version_info.minor != 10:
-        print(
-            "Hey! Congratulations, you've made it so far (which is pretty rare with no Python 3.10). Unfortunately, this program only works on Python 3.10. Please install Python 3.10 and try again."
-        )
-        sys.exit()
+    # if sys.version_info.major != 3 or sys.version_info.minor != 10:
+    #     print(
+    #         "Hey! Congratulations, you've made it so far (which is pretty rare with no Python 3.10). Unfortunately, this program only works on Python 3.10. Please install Python 3.10 and try again."
+    #     )
+    #     sys.exit()
     ffmpeg_install()
     directory = Path().absolute()
     config = settings.check_toml(
