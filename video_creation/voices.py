@@ -16,13 +16,13 @@ from utils.console import print_step, print_table
 console = Console()
 
 TTSProviders = {
-    "GoogleTranslate": GTTS,
-    "AWSPolly": AWSPolly,
-    "StreamlabsPolly": StreamlabsPolly,
-    "TikTok": TikTok,
-    "pyttsx": pyttsx,
-    "ElevenLabs": elevenlabs,
-    "OpenAI": OpenAITTS,
+    #"GoogleTranslate": GTTS,
+    #"AWSPolly": AWSPolly,
+    "StreamlabsPolly": StreamlabsPolly
+    #"TikTok": TikTok,
+    #"pyttsx": pyttsx,
+    #"ElevenLabs": elevenlabs,
+    #"OpenAI": OpenAITTS,
 }
 
 
