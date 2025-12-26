@@ -144,13 +144,15 @@ def chop_background(background_config: Dict[str, Tuple], video_length: int, redd
 
     print_step("Finding a spot in the backgrounds video to chop...✂️")
     video_choice = f"{background_config['video'][2]}-{background_config['video'][1]}"
-    background_video = VideoFileClip(f"assets/backgrounds/video/{video_choice}")
-    start_time_video, end_time_video = get_start_and_end_times(
-        video_length, background_video.duration
-    )
     # Extract video subclip
+    start_time_video = None
+    end_time_video = None
     try:
-        with VideoFileClip(f"assets/backgrounds/video/{video_choice}") as video:
+        print_substep("Loading background video metadata...")
+        with VideoFileClip(f"assets/backgrounds/video/{video_choice}", audio=False) as video:
+            start_time_video, end_time_video = get_start_and_end_times(
+                video_length, video.duration
+            )
             new = video.subclipped(start_time_video, end_time_video)
             new.write_videofile(
                 f"assets/temp/{thread_id}/background.mp4",
@@ -158,6 +160,8 @@ def chop_background(background_config: Dict[str, Tuple], video_length: int, redd
             )
 
     except (OSError, IOError):  # ffmpeg issue see #348
+        if start_time_video is None or end_time_video is None:
+            raise
         print_substep("FFMPEG issue. Trying again...")
         ffmpeg_extract_subclip(
             f"assets/backgrounds/video/{video_choice}",
