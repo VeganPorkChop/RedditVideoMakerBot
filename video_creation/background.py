@@ -5,6 +5,7 @@ from pathlib import Path
 from random import randrange
 from typing import Any, Dict, Tuple
 
+import ffmpeg
 import yt_dlp
 from moviepy import AudioFileClip, VideoFileClip
 from moviepy.config import FFMPEG_BINARY
@@ -191,10 +192,11 @@ def chop_background(background_config: Dict[str, Tuple], video_length: int, redd
 
     def output_has_video(path: str) -> bool:
         try:
-            info = ffmpeg_parse_infos(path, print_infos=False)
-        except (OSError, IOError):
-            return False
-        return bool(info.get("video_found"))
+            probe = ffmpeg.probe(path)
+        except ffmpeg.Error:
+            return Path(path).is_file() and Path(path).stat().st_size > 0
+        streams = probe.get("streams", [])
+        return any(stream.get("codec_type") == "video" for stream in streams)
 
     subprocess_call(build_ffmpeg_cmd(seek_before_input=True), logger="bar")
     if not output_has_video(output_path):
