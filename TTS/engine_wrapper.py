@@ -12,6 +12,7 @@ from rich.progress import track
 
 from utils import settings
 from utils.console import print_step, print_substep
+from utils.text import chunk_text
 from utils.voice import sanitize_text
 
 DEFAULT_MAX_LENGTH: int = (
@@ -82,8 +83,14 @@ class TTSEngine:
                 else:
                     self.call_tts("postaudio", process_text(self.reddit_object["thread_post"]))
             elif settings.config["settings"]["storymodemethod"] == 1:
-                for idx, text in track(enumerate(self.reddit_object["thread_post"])):
-                    self.call_tts(f"postaudio-{idx}", process_text(text))
+                chunk_index = 0
+                max_words_per_chunk = 4
+                for _, text in track(enumerate(self.reddit_object["thread_post"])):
+                    processed_text = process_text(text)
+                    for chunk in chunk_text(processed_text, max_words_per_chunk):
+                        self.call_tts(f"postaudio-{chunk_index}", chunk)
+                        chunk_index += 1
+                idx = max(chunk_index - 1, 0)
 
         else:
             for idx, comment in track(enumerate(self.reddit_object["comments"]), "Saving..."):

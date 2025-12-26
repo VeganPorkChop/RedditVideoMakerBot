@@ -8,10 +8,18 @@ from rich.progress import track
 from TTS.engine_wrapper import process_text
 from utils.fonts import getheight, getsize
 from utils.id import extract_id
+from utils.text import chunk_text
 
 
 def draw_multiple_line_text(
-    image, text, font, text_color, padding, wrap=50, transparent=False
+    image,
+    text,
+    font,
+    text_color,
+    padding,
+    wrap=50,
+    wrap_words=None,
+    transparent=False,
 ) -> None:
     """
     Draw multiline text over given image
@@ -19,7 +27,13 @@ def draw_multiple_line_text(
     draw = ImageDraw.Draw(image)
     font_height = getheight(font, text)
     image_width, image_height = image.size
-    lines = textwrap.wrap(text, width=wrap)
+    if wrap_words:
+        words = text.split()
+        lines = [
+            " ".join(words[i : i + wrap_words]) for i in range(0, len(words), wrap_words)
+        ]
+    else:
+        lines = textwrap.wrap(text, width=wrap)
     y = (image_height / 2) - (((font_height + (len(lines) * padding) / len(lines)) * len(lines)) / 2)
     for line in lines:
         line_width, line_height = getsize(font, line)
@@ -67,8 +81,20 @@ def imagemaker(theme, reddit_obj: dict, txtclr, padding=5, transparent=False) ->
 
     size = (1920, 1080)
 
-    for idx, text in track(enumerate(texts), "Rendering Image"):
-        image = Image.new("RGBA", size, theme)
-        text = process_text(text, False)
-        draw_multiple_line_text(image, text, font, txtclr, padding, wrap=30, transparent=transparent)
-        image.save(f"assets/temp/{reddit_id}/png/img{idx}.png")
+    max_words_per_image = 4
+    image_index = 0
+
+    for _, text in track(enumerate(texts), "Rendering Image"):
+        text = process_text(text)
+        for chunk in chunk_text(text, max_words_per_image):
+            image = Image.new("RGBA", size, theme)
+            draw_multiple_line_text(
+                image,
+                chunk,
+                font,
+                txtclr,
+                padding,
+                transparent=transparent,
+            )
+            image.save(f"assets/temp/{reddit_id}/png/img{image_index}.png")
+            image_index += 1

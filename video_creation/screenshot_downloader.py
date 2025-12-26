@@ -60,6 +60,10 @@ def get_screenshots_of_reddit_posts(reddit_object: dict, screenshot_num: int):
         transparent = False
 
     if storymode and settings.config["settings"]["storymodemethod"] == 1:
+        bgcolor = (0, 0, 0, 0)
+        transparent = True
+
+    if storymode and settings.config["settings"]["storymodemethod"] == 1:
         print_substep("Generating images...")
         return imagemaker(
             theme=bgcolor,
