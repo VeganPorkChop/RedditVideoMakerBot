@@ -11,7 +11,14 @@ from utils.id import extract_id
 
 
 def draw_multiple_line_text(
-    image, text, font, text_color, padding, wrap=50, transparent=False
+    image,
+    text,
+    font,
+    text_color,
+    padding,
+    wrap=50,
+    wrap_words=None,
+    transparent=False,
 ) -> None:
     """
     Draw multiline text over given image
@@ -19,7 +26,13 @@ def draw_multiple_line_text(
     draw = ImageDraw.Draw(image)
     font_height = getheight(font, text)
     image_width, image_height = image.size
-    lines = textwrap.wrap(text, width=wrap)
+    if wrap_words:
+        words = text.split()
+        lines = [
+            " ".join(words[i : i + wrap_words]) for i in range(0, len(words), wrap_words)
+        ]
+    else:
+        lines = textwrap.wrap(text, width=wrap)
     y = (image_height / 2) - (((font_height + (len(lines) * padding) / len(lines)) * len(lines)) / 2)
     for line in lines:
         line_width, line_height = getsize(font, line)
@@ -70,5 +83,13 @@ def imagemaker(theme, reddit_obj: dict, txtclr, padding=5, transparent=False) ->
     for idx, text in track(enumerate(texts), "Rendering Image"):
         image = Image.new("RGBA", size, theme)
         text = process_text(text, False)
-        draw_multiple_line_text(image, text, font, txtclr, padding, wrap=30, transparent=transparent)
+        draw_multiple_line_text(
+            image,
+            text,
+            font,
+            txtclr,
+            padding,
+            wrap_words=5,
+            transparent=transparent,
+        )
         image.save(f"assets/temp/{reddit_id}/png/img{idx}.png")
