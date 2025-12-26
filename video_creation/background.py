@@ -7,8 +7,9 @@ from typing import Any, Dict, Tuple
 
 import yt_dlp
 from moviepy import AudioFileClip, VideoFileClip
+from moviepy.config import FFMPEG_BINARY
+from moviepy.tools import subprocess_call
 from moviepy.video.io.ffmpeg_reader import ffmpeg_parse_infos
-from moviepy.video.io.ffmpeg_tools import ffmpeg_extract_subclip
 
 from utils import settings
 from utils.console import print_step, print_substep
@@ -155,13 +156,31 @@ def chop_background(background_config: Dict[str, Tuple], video_length: int, redd
 
     start_time_video, end_time_video = get_start_and_end_times(video_length, metadata["duration"])
     print_substep("Extracting background video subclip...")
-    ffmpeg_extract_subclip(
+    output_path = f"assets/temp/{thread_id}/background.mp4"
+    cmd = [
+        FFMPEG_BINARY,
+        "-y",
+        "-ss",
+        f"{start_time_video:0.2f}",
+        "-i",
         video_path,
-        start_time_video,
-        end_time_video,
-        outputfile=f"assets/temp/{thread_id}/background.mp4",
-        logger="bar",
-    )
+        "-t",
+        f"{end_time_video - start_time_video:0.2f}",
+        "-map",
+        "0",
+        "-c",
+        "copy",
+        "-fflags",
+        "+genpts",
+        "-avoid_negative_ts",
+        "make_zero",
+        "-reset_timestamps",
+        "1",
+        "-movflags",
+        "+faststart",
+        output_path,
+    ]
+    subprocess_call(cmd, logger="bar")
     print_substep("Background video chopped successfully!", style="bold green")
     return background_config["video"][2]
 
