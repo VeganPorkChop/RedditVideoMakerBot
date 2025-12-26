@@ -2,7 +2,6 @@ import json
 import random
 import re
 from pathlib import Path
-from random import randrange
 from typing import Any, Dict, Tuple
 
 import ffmpeg
@@ -39,7 +38,7 @@ def load_background_options():
     return _background_options
 
 
-def get_start_and_end_times(video_length: int, length_of_clip: int) -> Tuple[int, int]:
+def get_start_and_end_times(video_length: float, length_of_clip: float) -> Tuple[float, float]:
     """Generates a random interval of time to be used as the background of the video.
 
     Args:
@@ -49,14 +48,19 @@ def get_start_and_end_times(video_length: int, length_of_clip: int) -> Tuple[int
     Returns:
         tuple[int,int]: Start and end time of the randomized interval
     """
-    initialValue = 180
+    length_of_clip = float(length_of_clip)
+    video_length = float(video_length)
+    initial_value = 180.0
     # Issue #1649 - Ensures that will be a valid interval in the video
-    while int(length_of_clip) <= int(video_length + initialValue):
-        if initialValue == initialValue // 2:
-            raise Exception("Your background is too short for this video length")
-        else:
-            initialValue //= 2  # Divides the initial value by 2 until reach 0
-    random_time = randrange(initialValue, int(length_of_clip) - int(video_length))
+    if length_of_clip <= video_length:
+        raise Exception("Your background is too short for this video length")
+    while length_of_clip <= video_length + initial_value and initial_value > 0:
+        initial_value /= 2
+        if initial_value < 1:
+            initial_value = 0
+    max_start = length_of_clip - video_length
+    start_lower_bound = min(initial_value, max_start)
+    random_time = random.uniform(start_lower_bound, max_start)
     return random_time, random_time + video_length
 
 
