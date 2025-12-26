@@ -80,16 +80,25 @@ def imagemaker(theme, reddit_obj: dict, txtclr, padding=5, transparent=False) ->
 
     size = (1920, 1080)
 
-    for idx, text in track(enumerate(texts), "Rendering Image"):
+    def split_into_chunks(text: str, max_words: int) -> list[str]:
+        words = text.split()
+        return [" ".join(words[i : i + max_words]) for i in range(0, len(words), max_words)]
+
+    max_words_per_image = 4
+    image_index = 0
+
+    for _, text in track(enumerate(texts), "Rendering Image"):
         image = Image.new("RGBA", size, theme)
         text = process_text(text, False)
-        draw_multiple_line_text(
-            image,
-            text,
-            font,
-            txtclr,
-            padding,
-            wrap_words=4,
-            transparent=transparent,
-        )
-        image.save(f"assets/temp/{reddit_id}/png/img{idx}.png")
+        for chunk in split_into_chunks(text, max_words_per_image):
+            image = Image.new("RGBA", size, theme)
+            draw_multiple_line_text(
+                image,
+                chunk,
+                font,
+                txtclr,
+                padding,
+                transparent=transparent,
+            )
+            image.save(f"assets/temp/{reddit_id}/png/img{image_index}.png")
+            image_index += 1
