@@ -52,16 +52,18 @@ def get_start_and_end_times(video_length: float, length_of_clip: float) -> Tuple
     video_length = float(video_length)
     initial_value = 180.0
     # Issue #1649 - Ensures that will be a valid interval in the video
-    if length_of_clip <= video_length:
+    tolerance = 0.1
+    if length_of_clip < video_length and (video_length - length_of_clip) > tolerance:
         raise Exception("Your background is too short for this video length")
-    while length_of_clip <= video_length + initial_value and initial_value > 0:
+    effective_video_length = min(video_length, length_of_clip)
+    while length_of_clip <= effective_video_length + initial_value and initial_value > 0:
         initial_value /= 2
         if initial_value < 1:
             initial_value = 0
-    max_start = length_of_clip - video_length
+    max_start = max(0.0, length_of_clip - effective_video_length)
     start_lower_bound = min(initial_value, max_start)
     random_time = random.uniform(start_lower_bound, max_start)
-    return random_time, random_time + video_length
+    return random_time, random_time + effective_video_length
 
 
 def get_background_config(mode: str):
