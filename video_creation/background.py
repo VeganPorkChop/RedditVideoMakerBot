@@ -5,6 +5,7 @@ from pathlib import Path
 from random import randrange
 from typing import Any, Dict, Tuple
 
+import ffmpeg
 import yt_dlp
 from moviepy import AudioFileClip, VideoFileClip
 from moviepy.config import FFMPEG_BINARY
@@ -154,36 +155,67 @@ def chop_background(background_config: Dict[str, Tuple], video_length: int, redd
     except (OSError, IOError) as exc:
         raise RuntimeError(f"Failed to read background video metadata: {video_path}") from exc
 
-    start_time_video, end_time_video = get_start_and_end_times(video_length, metadata["duration"])
     print_substep("Extracting background video subclip...")
     output_path = f"assets/temp/{thread_id}/background.mp4"
-    duration = end_time_video - start_time_video
 
-    cmd = [
-        FFMPEG_BINARY,
-        "-y",
-        "-i",
-        video_path,
-        "-ss",
-        f"{start_time_video:0.2f}",
-        "-t",
-        f"{duration:0.2f}",
-        "-map",
-        "0:v:0",
-        "-c:v",
-        "libx264",
-        "-preset",
-        "veryfast",
-        "-crf",
-        "23",
-        "-pix_fmt",
-        "yuv420p",
-        "-an",
-        "-movflags",
-        "+faststart",
-        output_path,
-    ]
-    subprocess_call(cmd, logger="bar")
+    def output_has_video(path: str) -> bool:
+        file_path = Path(path)
+        if not file_path.is_file() or file_path.stat().st_size == 0:
+            return False
+        try:
+            probe = ffmpeg.probe(path)
+        except ffmpeg.Error:
+            return file_path.stat().st_size > 100_000
+        streams = probe.get("streams", [])
+        return any(stream.get("codec_type") == "video" for stream in streams)
+
+    def build_ffmpeg_cmd(start_time: float, duration: float) -> list:
+        return [
+            FFMPEG_BINARY,
+            "-y",
+            "-err_detect",
+            "ignore_err",
+            "-fflags",
+            "+discardcorrupt",
+            "-i",
+            video_path,
+            "-ss",
+            f"{start_time:0.2f}",
+            "-t",
+            f"{duration:0.2f}",
+            "-map",
+            "0:v:0",
+            "-c:v",
+            "libx264",
+            "-preset",
+            "veryfast",
+            "-crf",
+            "23",
+            "-pix_fmt",
+            "yuv420p",
+            "-an",
+            "-movflags",
+            "+faststart",
+            output_path,
+        ]
+
+    max_attempts = 5
+    for attempt in range(1, max_attempts + 1):
+        start_time_video, end_time_video = get_start_and_end_times(
+            video_length, metadata["duration"]
+        )
+        duration = end_time_video - start_time_video
+        subprocess_call(build_ffmpeg_cmd(start_time_video, duration), logger="bar")
+        if output_has_video(output_path):
+            break
+        if attempt < max_attempts:
+            print_substep(
+                "Extracted clip has no readable video stream; trying a different segment..."
+            )
+    else:
+        raise RuntimeError(
+            "Background clip extraction failed to produce a readable video stream."
+        )
     print_substep("Background video chopped successfully!", style="bold green")
     return background_config["video"][2]
 
