@@ -5,7 +5,6 @@ from pathlib import Path
 from random import randrange
 from typing import Any, Dict, Tuple
 
-import ffmpeg
 import yt_dlp
 from moviepy import AudioFileClip, VideoFileClip
 from moviepy.config import FFMPEG_BINARY
@@ -190,29 +189,7 @@ def chop_background(background_config: Dict[str, Tuple], video_length: int, redd
         ]
         return cmd
 
-    def output_has_video(path: str) -> bool:
-        file_path = Path(path)
-        if not file_path.is_file():
-            return False
-        if file_path.stat().st_size == 0:
-            return False
-        try:
-            probe = ffmpeg.probe(path)
-        except ffmpeg.Error:
-            return True
-        streams = probe.get("streams", [])
-        return any(stream.get("codec_type") == "video" for stream in streams)
-
     subprocess_call(build_ffmpeg_cmd(seek_before_input=True), logger="bar")
-    if not output_has_video(output_path):
-        print_substep(
-            "Extracted clip has no readable video stream; retrying with accurate seek..."
-        )
-        subprocess_call(build_ffmpeg_cmd(seek_before_input=False), logger="bar")
-        if not output_has_video(output_path):
-            raise RuntimeError(
-                "Background clip extraction failed to produce a readable video stream."
-            )
     print_substep("Background video chopped successfully!", style="bold green")
     return background_config["video"][2]
 
