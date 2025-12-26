@@ -89,7 +89,7 @@ def imagemaker(theme, reddit_obj: dict, txtclr, padding=5, transparent=False) ->
             font,
             txtclr,
             padding,
-            wrap_words=5,
+            wrap_words=4,
             transparent=transparent,
         )
         image.save(f"assets/temp/{reddit_id}/png/img{idx}.png")

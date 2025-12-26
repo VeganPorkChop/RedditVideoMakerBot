@@ -8,6 +8,7 @@ from typing import Any, Dict, Tuple
 import ffmpeg
 import yt_dlp
 from moviepy import AudioFileClip, VideoFileClip
+from moviepy.audio.fx import AudioLoop
 from moviepy.config import FFMPEG_BINARY
 from moviepy.tools import subprocess_call
 from moviepy.video.io.ffmpeg_reader import ffmpeg_parse_infos
@@ -139,10 +140,18 @@ def chop_background(background_config: Dict[str, Tuple], video_length: int, redd
         print_step("Finding a spot in the backgrounds audio to chop...✂️")
         audio_choice = f"{background_config['audio'][2]}-{background_config['audio'][1]}"
         background_audio = AudioFileClip(f"assets/backgrounds/audio/{audio_choice}")
-        start_time_audio, end_time_audio = get_start_and_end_times(
-            video_length, background_audio.duration
-        )
-        background_audio = background_audio.subclipped(start_time_audio, end_time_audio)
+        if background_audio.duration < video_length:
+            print_substep(
+                "Background audio is shorter than the video. Looping audio to match length."
+            )
+            background_audio = background_audio.with_effects(
+                [AudioLoop(duration=video_length)]
+            )
+        else:
+            start_time_audio, end_time_audio = get_start_and_end_times(
+                video_length, background_audio.duration
+            )
+            background_audio = background_audio.subclipped(start_time_audio, end_time_audio)
         background_audio.write_audiofile(f"assets/temp/{thread_id}/background.mp3")
 
     print_step("Finding a spot in the backgrounds video to chop...✂️")
@@ -198,6 +207,46 @@ def chop_background(background_config: Dict[str, Tuple], video_length: int, redd
             "+faststart",
             output_path,
         ]
+
+    def build_ffmpeg_loop_cmd(duration: float) -> list:
+        return [
+            FFMPEG_BINARY,
+            "-y",
+            "-err_detect",
+            "ignore_err",
+            "-fflags",
+            "+discardcorrupt",
+            "-stream_loop",
+            "-1",
+            "-i",
+            video_path,
+            "-t",
+            f"{duration:0.2f}",
+            "-map",
+            "0:v:0",
+            "-c:v",
+            "libx264",
+            "-preset",
+            "veryfast",
+            "-crf",
+            "23",
+            "-pix_fmt",
+            "yuv420p",
+            "-an",
+            "-movflags",
+            "+faststart",
+            output_path,
+        ]
+
+    if metadata["duration"] < video_length:
+        print_substep("Background video is shorter than the video. Looping footage.")
+        subprocess_call(build_ffmpeg_loop_cmd(video_length), logger="bar")
+        if not output_has_video(output_path):
+            raise RuntimeError(
+                "Background clip extraction failed to produce a readable video stream."
+            )
+        print_substep("Background video chopped successfully!", style="bold green")
+        return background_config["video"][2]
 
     max_attempts = 5
     for attempt in range(1, max_attempts + 1):
