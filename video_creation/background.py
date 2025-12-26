@@ -157,31 +157,55 @@ def chop_background(background_config: Dict[str, Tuple], video_length: int, redd
     start_time_video, end_time_video = get_start_and_end_times(video_length, metadata["duration"])
     print_substep("Extracting background video subclip...")
     output_path = f"assets/temp/{thread_id}/background.mp4"
-    cmd = [
-        FFMPEG_BINARY,
-        "-y",
-        "-ss",
-        f"{start_time_video:0.2f}",
-        "-i",
-        video_path,
-        "-t",
-        f"{end_time_video - start_time_video:0.2f}",
-        "-map",
-        "0:v:0",
-        "-c:v",
-        "libx264",
-        "-preset",
-        "veryfast",
-        "-crf",
-        "23",
-        "-pix_fmt",
-        "yuv420p",
-        "-an",
-        "-movflags",
-        "+faststart",
-        output_path,
-    ]
-    subprocess_call(cmd, logger="bar")
+    duration = end_time_video - start_time_video
+
+    def build_ffmpeg_cmd(seek_before_input: bool) -> list:
+        cmd = [FFMPEG_BINARY, "-y"]
+        if seek_before_input:
+            cmd += ["-ss", f"{start_time_video:0.2f}"]
+        cmd += [
+            "-i",
+            video_path,
+        ]
+        if not seek_before_input:
+            cmd += ["-ss", f"{start_time_video:0.2f}"]
+        cmd += [
+            "-t",
+            f"{duration:0.2f}",
+            "-map",
+            "0:v:0",
+            "-c:v",
+            "libx264",
+            "-preset",
+            "veryfast",
+            "-crf",
+            "23",
+            "-pix_fmt",
+            "yuv420p",
+            "-an",
+            "-movflags",
+            "+faststart",
+            output_path,
+        ]
+        return cmd
+
+    def output_has_video(path: str) -> bool:
+        try:
+            info = ffmpeg_parse_infos(path, print_infos=False)
+        except (OSError, IOError):
+            return False
+        return bool(info.get("video_found"))
+
+    subprocess_call(build_ffmpeg_cmd(seek_before_input=True), logger="bar")
+    if not output_has_video(output_path):
+        print_substep(
+            "Extracted clip has no readable video stream; retrying with accurate seek..."
+        )
+        subprocess_call(build_ffmpeg_cmd(seek_before_input=False), logger="bar")
+        if not output_has_video(output_path):
+            raise RuntimeError(
+                "Background clip extraction failed to produce a readable video stream."
+            )
     print_substep("Background video chopped successfully!", style="bold green")
     return background_config["video"][2]
 
