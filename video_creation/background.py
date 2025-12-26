@@ -7,6 +7,7 @@ from typing import Any, Dict, Tuple
 
 import yt_dlp
 from moviepy import AudioFileClip, VideoFileClip
+from moviepy.video.io.ffmpeg_reader import ffmpeg_parse_infos
 from moviepy.video.io.ffmpeg_tools import ffmpeg_extract_subclip
 
 from utils import settings
@@ -145,30 +146,22 @@ def chop_background(background_config: Dict[str, Tuple], video_length: int, redd
     print_step("Finding a spot in the backgrounds video to chop...✂️")
     video_choice = f"{background_config['video'][2]}-{background_config['video'][1]}"
     # Extract video subclip
-    start_time_video = None
-    end_time_video = None
+    video_path = f"assets/backgrounds/video/{video_choice}"
+    print_substep("Probing background video duration with ffmpeg...")
     try:
-        print_substep("Loading background video metadata...")
-        with VideoFileClip(f"assets/backgrounds/video/{video_choice}", audio=False) as video:
-            start_time_video, end_time_video = get_start_and_end_times(
-                video_length, video.duration
-            )
-            new = video.subclipped(start_time_video, end_time_video)
-            new.write_videofile(
-                f"assets/temp/{thread_id}/background.mp4",
-                logger="bar",
-            )
+        metadata = ffmpeg_parse_infos(video_path, print_infos=False)
+    except (OSError, IOError) as exc:
+        raise RuntimeError(f"Failed to read background video metadata: {video_path}") from exc
 
-    except (OSError, IOError):  # ffmpeg issue see #348
-        if start_time_video is None or end_time_video is None:
-            raise
-        print_substep("FFMPEG issue. Trying again...")
-        ffmpeg_extract_subclip(
-            f"assets/backgrounds/video/{video_choice}",
-            start_time_video,
-            end_time_video,
-            outputfile=f"assets/temp/{thread_id}/background.mp4",
-        )
+    start_time_video, end_time_video = get_start_and_end_times(video_length, metadata["duration"])
+    print_substep("Extracting background video subclip...")
+    ffmpeg_extract_subclip(
+        video_path,
+        start_time_video,
+        end_time_video,
+        outputfile=f"assets/temp/{thread_id}/background.mp4",
+        logger="bar",
+    )
     print_substep("Background video chopped successfully!", style="bold green")
     return background_config["video"][2]
 
