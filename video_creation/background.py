@@ -152,7 +152,10 @@ def chop_background(background_config: Dict[str, Tuple], video_length: int, redd
     try:
         with VideoFileClip(f"assets/backgrounds/video/{video_choice}") as video:
             new = video.subclipped(start_time_video, end_time_video)
-            new.write_videofile(f"assets/temp/{thread_id}/background.mp4")
+            new.write_videofile(
+                f"assets/temp/{thread_id}/background.mp4",
+                logger="bar",
+            )
 
     except (OSError, IOError):  # ffmpeg issue see #348
         print_substep("FFMPEG issue. Trying again...")
