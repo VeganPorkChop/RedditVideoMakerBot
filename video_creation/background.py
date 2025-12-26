@@ -191,10 +191,15 @@ def chop_background(background_config: Dict[str, Tuple], video_length: int, redd
         return cmd
 
     def output_has_video(path: str) -> bool:
+        file_path = Path(path)
+        if not file_path.is_file():
+            return False
+        if file_path.stat().st_size == 0:
+            return False
         try:
             probe = ffmpeg.probe(path)
         except ffmpeg.Error:
-            return Path(path).is_file() and Path(path).stat().st_size > 0
+            return True
         streams = probe.get("streams", [])
         return any(stream.get("codec_type") == "video" for stream in streams)
 
