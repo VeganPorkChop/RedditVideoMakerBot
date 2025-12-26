@@ -159,37 +159,31 @@ def chop_background(background_config: Dict[str, Tuple], video_length: int, redd
     output_path = f"assets/temp/{thread_id}/background.mp4"
     duration = end_time_video - start_time_video
 
-    def build_ffmpeg_cmd(seek_before_input: bool) -> list:
-        cmd = [FFMPEG_BINARY, "-y"]
-        if seek_before_input:
-            cmd += ["-ss", f"{start_time_video:0.2f}"]
-        cmd += [
-            "-i",
-            video_path,
-        ]
-        if not seek_before_input:
-            cmd += ["-ss", f"{start_time_video:0.2f}"]
-        cmd += [
-            "-t",
-            f"{duration:0.2f}",
-            "-map",
-            "0:v:0",
-            "-c:v",
-            "libx264",
-            "-preset",
-            "veryfast",
-            "-crf",
-            "23",
-            "-pix_fmt",
-            "yuv420p",
-            "-an",
-            "-movflags",
-            "+faststart",
-            output_path,
-        ]
-        return cmd
-
-    subprocess_call(build_ffmpeg_cmd(seek_before_input=True), logger="bar")
+    cmd = [
+        FFMPEG_BINARY,
+        "-y",
+        "-i",
+        video_path,
+        "-ss",
+        f"{start_time_video:0.2f}",
+        "-t",
+        f"{duration:0.2f}",
+        "-map",
+        "0:v:0",
+        "-c:v",
+        "libx264",
+        "-preset",
+        "veryfast",
+        "-crf",
+        "23",
+        "-pix_fmt",
+        "yuv420p",
+        "-an",
+        "-movflags",
+        "+faststart",
+        output_path,
+    ]
+    subprocess_call(cmd, logger="bar")
     print_substep("Background video chopped successfully!", style="bold green")
     return background_config["video"][2]
 
