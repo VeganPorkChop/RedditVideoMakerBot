@@ -8,6 +8,7 @@ from rich.progress import track
 from TTS.engine_wrapper import process_text
 from utils.fonts import getheight, getsize
 from utils.id import extract_id
+from utils.text import chunk_text
 
 
 def draw_multiple_line_text(
@@ -80,17 +81,12 @@ def imagemaker(theme, reddit_obj: dict, txtclr, padding=5, transparent=False) ->
 
     size = (1920, 1080)
 
-    def split_into_chunks(text: str, max_words: int) -> list[str]:
-        words = text.split()
-        return [" ".join(words[i : i + max_words]) for i in range(0, len(words), max_words)]
-
     max_words_per_image = 4
     image_index = 0
 
     for _, text in track(enumerate(texts), "Rendering Image"):
-        image = Image.new("RGBA", size, theme)
-        text = process_text(text, False)
-        for chunk in split_into_chunks(text, max_words_per_image):
+        text = process_text(text)
+        for chunk in chunk_text(text, max_words_per_image):
             image = Image.new("RGBA", size, theme)
             draw_multiple_line_text(
                 image,
