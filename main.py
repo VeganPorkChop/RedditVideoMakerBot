@@ -6,6 +6,7 @@ from pathlib import Path
 from subprocess import Popen
 from typing import Dict, NoReturn
 
+import ffmpeg
 from prawcore import ResponseException
 
 from reddit.subreddit import get_subreddit_threads
@@ -26,6 +27,22 @@ from video_creation.screenshot_downloader import get_screenshots_of_reddit_posts
 from video_creation.voices import save_text_to_mp3
 
 __VERSION__ = "3.4.0"
+
+MAX_VIDEO_SECONDS = 90
+END_SCREEN_SECONDS = 5
+MAX_CONTENT_SECONDS = MAX_VIDEO_SECONDS - END_SCREEN_SECONDS
+PART_NUMBER_WORDS = {
+    1: "One",
+    2: "Two",
+    3: "Three",
+    4: "Four",
+    5: "Five",
+    6: "Six",
+    7: "Seven",
+    8: "Eight",
+    9: "Nine",
+    10: "Ten",
+}
 
 print(
     """
@@ -61,7 +78,82 @@ def main(POST_ID=None) -> None:
     download_background_video(bg_config["video"])
     download_background_audio(bg_config["audio"])
     chop_background(bg_config, length, reddit_object)
-    make_final_video(number_of_comments, length, reddit_object, bg_config)
+    if length <= MAX_VIDEO_SECONDS:
+        make_final_video(number_of_comments, length, reddit_object, bg_config)
+        return
+
+    if settings.config["settings"]["storymode"] and settings.config["settings"]["storymodemethod"] == 0:
+        print_substep(
+            "Storymode method 0 does not support automatic splitting; rendering as a single video."
+        )
+        make_final_video(number_of_comments, length, reddit_object, bg_config)
+        return
+
+    title_duration = float(
+        ffmpeg.probe(f"assets/temp/{reddit_id}/mp3/title.mp3")["format"]["duration"]
+    )
+    if settings.config["settings"]["storymode"] and settings.config["settings"]["storymodemethod"] == 1:
+        clip_paths = [
+            f"assets/temp/{reddit_id}/mp3/postaudio-{i}.mp3" for i in range(number_of_comments)
+        ]
+    else:
+        clip_paths = [f"assets/temp/{reddit_id}/mp3/{i}.mp3" for i in range(number_of_comments)]
+
+    clip_durations = [float(ffmpeg.probe(path)["format"]["duration"]) for path in clip_paths]
+    max_segment_seconds = MAX_CONTENT_SECONDS - title_duration
+    if max_segment_seconds <= 0:
+        print_substep(
+            "Title audio is too long to fit within the 90 second limit; rendering as a single video."
+        )
+        make_final_video(number_of_comments, length, reddit_object, bg_config)
+        return
+
+    segments = split_video_segments(clip_durations, max_segment_seconds)
+    if len(segments) <= 1:
+        make_final_video(number_of_comments, length, reddit_object, bg_config)
+        return
+
+    total_parts = len(segments)
+    for part_number, (start_index, end_index, segment_length) in enumerate(segments, start=1):
+        part_length = math.ceil(title_duration + segment_length)
+        end_screen_seconds = END_SCREEN_SECONDS if part_number < total_parts else 0
+        end_screen_text = (
+            f"Part {format_part_number(part_number + 1)} Coming Soon"
+            if part_number < total_parts
+            else ""
+        )
+        make_final_video(
+            number_of_comments,
+            part_length,
+            reddit_object,
+            bg_config,
+            start_index=start_index,
+            end_index=end_index,
+            part_number=part_number,
+            total_parts=total_parts,
+            end_screen_seconds=end_screen_seconds,
+            end_screen_text=end_screen_text,
+        )
+
+
+def split_video_segments(durations, max_segment_seconds):
+    segments = []
+    start_index = 0
+    current_length = 0.0
+    for index, duration in enumerate(durations):
+        if current_length + duration > max_segment_seconds and current_length > 0:
+            segments.append((start_index, index, current_length))
+            start_index = index
+            current_length = 0.0
+        current_length += duration
+
+    if start_index < len(durations):
+        segments.append((start_index, len(durations), current_length))
+    return segments
+
+
+def format_part_number(part_number):
+    return PART_NUMBER_WORDS.get(part_number, str(part_number))
 
 
 def run_many(times) -> None:

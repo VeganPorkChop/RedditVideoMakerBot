@@ -15,7 +15,7 @@ from utils.console import print_step, print_substep
 from utils.voice import sanitize_text
 
 DEFAULT_MAX_LENGTH: int = (
-    50  # Video length variable, edit this on your own risk. It should work, but it's not supported
+    10000  # Video length variable, edit this on your own risk. It should work, but it's not supported
 )
 
 
@@ -73,7 +73,7 @@ class TTSEngine:
         self.add_periods()
         self.call_tts("title", process_text(self.reddit_object["thread_title"]))
         # processed_text = ##self.reddit_object["thread_post"] != ""
-        idx = 0
+        count = 0
 
         if settings.config["settings"]["storymode"]:
             if settings.config["settings"]["storymodemethod"] == 0:
@@ -84,13 +84,13 @@ class TTSEngine:
             elif settings.config["settings"]["storymodemethod"] == 1:
                 for idx, text in track(enumerate(self.reddit_object["thread_post"])):
                     self.call_tts(f"postaudio-{idx}", process_text(text))
+                    count = idx + 1
 
         else:
             for idx, comment in track(enumerate(self.reddit_object["comments"]), "Saving..."):
                 # ! Stop creating mp3 files if the length is greater than max length.
                 if self.length > self.max_length and idx > 1:
                     self.length -= self.last_clip_length
-                    idx -= 1
                     break
                 if (
                     len(comment["comment_body"]) > self.tts_module.max_chars
@@ -98,9 +98,10 @@ class TTSEngine:
                     self.split_post(comment["comment_body"], idx)  # Split the comment
                 else:  # If the comment is not too long, just call the tts engine
                     self.call_tts(f"{idx}", process_text(comment["comment_body"]))
+                count = idx + 1
 
         print_substep("Saved Text to MP3 files successfully.", style="bold green")
-        return self.length, idx
+        return self.length, count
 
     def split_post(self, text: str, idx):
         split_files = []

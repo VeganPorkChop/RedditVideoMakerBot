@@ -7,7 +7,7 @@ import threading
 import time
 from os.path import exists  # Needs to be imported specifically
 from pathlib import Path
-from typing import Dict, Final, Tuple
+from typing import Dict, Final, Optional, Tuple
 
 import ffmpeg
 import translators
@@ -201,6 +201,12 @@ def make_final_video(
     length: int,
     reddit_obj: dict,
     background_config: Dict[str, Tuple],
+    start_index: int = 0,
+    end_index: Optional[int] = None,
+    part_number: int = 1,
+    total_parts: int = 1,
+    end_screen_seconds: int = 0,
+    end_screen_text: str = "Part Two Coming Soon",
 ):
     """Gathers audio clips, gathers all screenshots, stitches them together and saves the final video to assets/temp
     Args:
@@ -216,6 +222,11 @@ def make_final_video(
     opacity = settings.config["settings"]["opacity"]
 
     reddit_id = extract_id(reddit_obj)
+
+    if end_index is None:
+        end_index = number_of_clips
+
+    segment_indices = list(range(start_index, end_index))
 
     allowOnlyTTSFolder: bool = (
         settings.config["settings"]["background"]["enable_extra_audio"]
@@ -240,19 +251,19 @@ def make_final_video(
         elif settings.config["settings"]["storymodemethod"] == 1:
             audio_clips = [
                 ffmpeg.input(f"assets/temp/{reddit_id}/mp3/postaudio-{i}.mp3")
-                for i in track(range(number_of_clips + 1), "Collecting the audio files...")
+                for i in track(segment_indices, "Collecting the audio files...")
             ]
             audio_clips.insert(0, ffmpeg.input(f"assets/temp/{reddit_id}/mp3/title.mp3"))
 
     else:
         audio_clips = [
-            ffmpeg.input(f"assets/temp/{reddit_id}/mp3/{i}.mp3") for i in range(number_of_clips)
+            ffmpeg.input(f"assets/temp/{reddit_id}/mp3/{i}.mp3") for i in segment_indices
         ]
         audio_clips.insert(0, ffmpeg.input(f"assets/temp/{reddit_id}/mp3/title.mp3"))
 
         audio_clips_durations = [
             float(ffmpeg.probe(f"assets/temp/{reddit_id}/mp3/{i}.mp3")["format"]["duration"])
-            for i in range(number_of_clips)
+            for i in segment_indices
         ]
         audio_clips_durations.insert(
             0,
@@ -268,6 +279,7 @@ def make_final_video(
     screenshot_width = int((W * 45) // 100)
     audio = ffmpeg.input(f"assets/temp/{reddit_id}/audio.mp3")
     final_audio = merge_background_audio(audio, reddit_id)
+    only_tts_audio = audio
 
     image_clips = list()
 
@@ -301,7 +313,7 @@ def make_final_video(
             float(
                 ffmpeg.probe(f"assets/temp/{reddit_id}/mp3/postaudio-{i}.mp3")["format"]["duration"]
             )
-            for i in range(number_of_clips)
+            for i in segment_indices
         ]
         audio_clips_durations.insert(
             0,
@@ -322,43 +334,48 @@ def make_final_video(
             )
             current_time += audio_clips_durations[0]
         elif settings.config["settings"]["storymodemethod"] == 1:
-            for i in track(range(0, number_of_clips + 1), "Collecting the image files..."):
+            for clip_index in track(segment_indices, "Collecting the image files..."):
                 image_clips.append(
-                    ffmpeg.input(f"assets/temp/{reddit_id}/png/img{i}.png")["v"].filter(
+                    ffmpeg.input(f"assets/temp/{reddit_id}/png/img{clip_index}.png")["v"].filter(
                         "scale", screenshot_width, -1
                     )
                 )
+            for idx, image_clip in enumerate(image_clips):
                 background_clip = background_clip.overlay(
-                    image_clips[i],
-                    enable=f"between(t,{current_time},{current_time + audio_clips_durations[i]})",
+                    image_clip,
+                    enable=f"between(t,{current_time},{current_time + audio_clips_durations[idx]})",
                     x="(main_w-overlay_w)/2",
                     y="(main_h-overlay_h)/2",
                 )
-                current_time += audio_clips_durations[i]
+                current_time += audio_clips_durations[idx]
     else:
-        for i in range(0, number_of_clips + 1):
+        for clip_index in segment_indices:
             image_clips.append(
-                ffmpeg.input(f"assets/temp/{reddit_id}/png/comment_{i}.png")["v"].filter(
-                    "scale", screenshot_width, -1
-                )
+                ffmpeg.input(
+                    f"assets/temp/{reddit_id}/png/comment_{clip_index}.png"
+                )["v"].filter("scale", screenshot_width, -1)
             )
-            image_overlay = image_clips[i].filter("colorchannelmixer", aa=opacity)
+        for idx, image_clip in enumerate(image_clips):
+            image_overlay = image_clip.filter("colorchannelmixer", aa=opacity)
             assert (
                 audio_clips_durations is not None
             ), "Please make a GitHub issue if you see this. Ping @JasonLovesDoggo on GitHub."
             background_clip = background_clip.overlay(
                 image_overlay,
-                enable=f"between(t,{current_time},{current_time + audio_clips_durations[i]})",
+                enable=f"between(t,{current_time},{current_time + audio_clips_durations[idx]})",
                 x="(main_w-overlay_w)/2",
                 y="(main_h-overlay_h)/2",
             )
-            current_time += audio_clips_durations[i]
+            current_time += audio_clips_durations[idx]
 
     title = extract_id(reddit_obj, "thread_title")
     idx = extract_id(reddit_obj)
     title_thumb = reddit_obj["thread_title"]
 
-    filename = f"{name_normalize(title)[:251]}"
+    filename = f"{name_normalize(title)}"
+    if total_parts > 1:
+        filename = f"{filename} Part {part_number}"
+    filename = filename[:251]
     subreddit = settings.config["reddit"]["thread"]["subreddit"]
 
     if not exists(f"./results/{subreddit}"):
@@ -415,6 +432,29 @@ def make_final_video(
         fontfile=os.path.join("fonts", "Roboto-Regular.ttf"),
     )
     background_clip = background_clip.filter("scale", W, H)
+    if end_screen_seconds > 0:
+        end_screen = ffmpeg.input(
+            f"color=c=black:s={W}x{H}:d={end_screen_seconds}",
+            f="lavfi",
+        )
+        end_screen = ffmpeg.drawtext(
+            end_screen,
+            text=end_screen_text,
+            fontfile=os.path.join("fonts", "Roboto-Bold.ttf"),
+            fontcolor="white",
+            fontsize=80,
+            x="(w-text_w)/2",
+            y="(h-text_h)/2",
+        )
+        background_clip = ffmpeg.concat(background_clip, end_screen, v=1, a=0)
+        silent_audio = (
+            ffmpeg.input("anullsrc=r=44100:cl=stereo", f="lavfi")
+            .filter("atrim", duration=end_screen_seconds)
+            .filter("asetpts", "N/SR/TB")
+        )
+        final_audio = ffmpeg.concat(final_audio, silent_audio, v=0, a=1)
+        only_tts_audio = ffmpeg.concat(only_tts_audio, silent_audio, v=0, a=1)
+        length += end_screen_seconds
     print_step("Rendering the video 🎥")
     from tqdm import tqdm
 
@@ -464,7 +504,7 @@ def make_final_video(
             try:
                 ffmpeg.output(
                     background_clip,
-                    audio,
+                    only_tts_audio,
                     path,
                     f="mp4",
                     **{
